@@ -16,7 +16,7 @@ extern "C" {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
   let fb_path = std::env::var("FRAMEBUFFER").unwrap_or("/dev/fb0".to_string());
-  eprintln!("fb_path={}", &fb_path);
+  eprintln!("Using FB {}", &fb_path);
   
   let mut state = State {
     fb: Framebuffer::new(&fb_path)?,
@@ -25,16 +25,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     cursors: vec![],
     exit: false,
   };
-  let mut remaining_errors: usize = 900;
+  let mut remaining_errors: usize = 90;
   
   let tty_to_return_to_ifn_in_tty = std::env::var("JSKEU_TTY_RETURN_NUM").unwrap_or("1".to_string()); // I always use tty1 as my x11 GUI
   let tty_to_go_to_ifn_in_tty = std::env::var("JSKEU_TTY_GOTO_NUM").unwrap_or("2".to_string()); // generally unused
   let we_were_in_tty = punwrap_r!(Framebuffer::set_kd_mode(KdMode::Graphics), tf);
-  if (!we_were_in_tty) {
+  if !we_were_in_tty {
     eprintln!("Attempting to use chvt to go to tty {}", &tty_to_go_to_ifn_in_tty);
     punwrap_r!(Command::new("sudo")
       .args(&["chvt", &tty_to_go_to_ifn_in_tty])
       .status(), nop);
+    
+    std::thread::sleep(std::time::Duration::from_millis(110));
+
+    if let Err(_) = Framebuffer::set_kd_mode_ex(format!("/dev/tty{}", tty_to_go_to_ifn_in_tty), KdMode::Graphics) {
+      eprintln!("Failed to move tty{} to graphics mode, exiting...", tty_to_go_to_ifn_in_tty);
+      eprintln!("Attempting to use chvt to return to tty {}", &tty_to_return_to_ifn_in_tty);
+      punwrap_r!(Command::new("sudo")
+        .args(&["chvt", &tty_to_return_to_ifn_in_tty])
+        .status(), nop);
+      return Ok(());
+    }
+
   }
 
   loop {
@@ -45,12 +57,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     remaining_errors -= 1;
 
     if let Err(e) = state_update(&mut state) {
-      eprintln!("main state_update: {}", e);
+      eprintln!("{}:{}: {}", e, file!(), line!());
       remaining_errors -= 1;
     }
 
     if let Err(e) = frame(&mut state) {
-      eprintln!("main frame: {}", e);
+      eprintln!("{}:{}: {}", e, file!(), line!());
       remaining_errors -= 1;
     }
 
@@ -64,11 +76,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
   }
 
-  if we_were_in_tty {
-    // go back to cli mode
-    punwrap_r!(Framebuffer::set_kd_mode(KdMode::Text), nop);
-  }
-  else {
+  // go back to cli mode
+  punwrap_r!(Framebuffer::set_kd_mode(KdMode::Text), nop);
+
+  if !we_were_in_tty {
+    // call ioctl on current tty to go back into text mode
+    punwrap_r!(Framebuffer::set_kd_mode_ex(format!("/dev/tty{}", tty_to_go_to_ifn_in_tty), KdMode::Text), nop);
+    
     // switch to the x11 gui
     eprintln!("Attempting to use chvt to return to tty {}", &tty_to_return_to_ifn_in_tty);
     punwrap_r!(Command::new("sudo")
@@ -160,9 +174,16 @@ fn frame(state: &mut State) -> Result<(), Box<dyn std::error::Error>> {
   if let Some(ref mut frame) = &mut state.frame {
     
     // First draw BG (TODO not this, srsly bad performance)
-    for (r, line) in frame.chunks_mut(line_length as usize).enumerate() {
-      for (c, p) in line.chunks_mut(bytespp as usize).enumerate() {
-        write_pixel_rgb!(p, 12, 12, 12);
+    if state.tick % 10 == 0 {
+      for (r, line) in frame.chunks_mut(line_length as usize).enumerate() {
+        for (c, p) in line.chunks_mut(bytespp as usize).enumerate() {
+          if r % 3 == 0 {
+            write_pixel_rgb!(p, 120, 120, 120);
+          }
+          else {
+            write_pixel_rgb!(p, 12, 12, 12);
+          }
+        }
       }
     }
 
