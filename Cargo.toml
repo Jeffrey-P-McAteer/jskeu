@@ -4,14 +4,25 @@ version = "0.1.0"
 authors = ["Jeffrey McAteer <jeffrey.p.mcateer@gmail.com>"]
 edition = "2018"
 
+[lib]
+name = "jskeu"
+path = "src/lib.rs"
 
+[[bin]]
+name = "jskeu"
+path = "src/jskeu.rs"
 
 [dependencies]
-#framebuffer = "0.3"
-framebuffer = { git = "https://github.com/Roysten/rust-framebuffer.git" }
-#nix = "0.22"
+
+[target.'cfg(target_os="linux")'.dependencies]
+framebuffer = "0.3"
 evdev = "0.11"
 
+
+[target.'cfg(target_os="windows")'.dependencies]
+
+
+[target.'cfg(target_os="macos")'.dependencies]
 
 
 [build-dependencies]
