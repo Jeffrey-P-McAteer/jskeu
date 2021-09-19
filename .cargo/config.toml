@@ -18,3 +18,9 @@ ar = "x86_64-pc-windows-gnu.zar"
 linker = "x86_64-apple-darwin.zcc"
 ar = "x86_64-apple-darwin.zar"
 
+
+[target.aarch64-apple-darwin]
+linker = "aarch64-apple-darwin.zcc"
+ar = "aarch64-apple-darwin.zar"
+
+

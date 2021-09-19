@@ -46,6 +46,14 @@ def host_is_windows():
 def host_is_macos():
   return 'darwin' in platform.system().lower()
 
+def host_is_macos_arm64():
+  p = platform.processor().lower()
+  return host_is_macos() and ('amd' in p or ('x86' in p and '64' in p))
+
+def host_is_macos_aarch64():
+  p = platform.processor().lower()
+  return host_is_macos() and ('aarch64' in p or 'aarch64' in p)
+
 def cmd(bin_name, *args):
   cmd = [shutil.which(bin_name)]
   cmd += list(args)
@@ -71,7 +79,8 @@ def errif_ncontain(haystack, needle, err_msg):
 if __name__ == '__main__':
   run_after_build = False
   build_hostonly = True
-  
+  publish_release_when_done = False
+
   if 'all' in sys.argv:
     build_hostonly = False
   
@@ -79,13 +88,20 @@ if __name__ == '__main__':
     build_hostonly = True
     run_after_build = True
 
-  build_linux64 = (not build_hostonly) or (build_hostonly and host_is_linux())
-  build_win64 = (not build_hostonly) or (build_hostonly and host_is_windows())
-  build_mac64 = (not build_hostonly) or (build_hostonly and host_is_macos())
+  if 'publish' in sys.argv or 'release' in sys.argv:
+    run_after_build = False
+    publish_release_when_done = True
+    build_hostonly = False
 
-  print('build_linux64={}'.format(build_linux64))
-  print('build_win64={}'.format(build_win64))
-  print('build_mac64={}'.format(build_mac64))
+  build_linux_arm64 = (not build_hostonly) or (build_hostonly and host_is_linux())
+  build_win_arm64 = (not build_hostonly) or (build_hostonly and host_is_windows())
+  build_mac_arm64 = (not build_hostonly) or (build_hostonly and host_is_macos_arm64())
+  build_mac_aarch64 = (not build_hostonly) or (build_hostonly and host_is_macos_aarch64())
+
+  print('build_linux_arm64={}'.format(build_linux_arm64))
+  print('build_win_arm64={}'.format(build_win_arm64))
+  print('build_mac_arm64={}'.format(build_mac_arm64))
+  print('build_mac_aarch64={}'.format(build_mac_aarch64))
 
   # cd to directory containing build.py
   os.chdir(
@@ -103,13 +119,14 @@ if __name__ == '__main__':
     ('zig', 'We use zig to cross-compile everything for foreign targets.'),
   )
   ito = stdout_of('rustup', 'target', 'list', '--installed')
-  if build_linux64:
+  if build_linux_arm64:
     num_errs += errif_ncontain(ito, 'x86_64-unknown-linux-gnu', 'You must install the x86_64-unknown-linux-gnu toolchain for rust: rustup target add x86_64-unknown-linux-gnu')
-  if build_win64:
+  if build_win_arm64:
     num_errs += errif_ncontain(ito, 'x86_64-pc-windows-gnu', 'You must install the x86_64-pc-windows-gnu toolchain for rust: rustup target add x86_64-pc-windows-gnu')
-  if build_mac64:
+  if build_mac_arm64:
     num_errs += errif_ncontain(ito, 'x86_64-apple-darwin', 'You must install the x86_64-apple-darwin toolchain for rust: rustup target add x86_64-apple-darwin')
-  #num_errs += errif_ncontain(ito, 'aarch64-apple-darwin', 'You must install the aarch64-apple-darwin toolchain for rust: rustup target add aarch64-apple-darwin')
+  if build_mac_aarch64:
+    num_errs += errif_ncontain(ito, 'aarch64-apple-darwin', 'You must install the aarch64-apple-darwin toolchain for rust: rustup target add aarch64-apple-darwin')
   
   if num_errs > 0:
     print('Exiting because of {} development environment errors detected above.'.format(num_errs))
@@ -117,20 +134,21 @@ if __name__ == '__main__':
 
   # Now begin compile for all targets
 
-  if build_linux64:
+  if build_linux_arm64:
     cmd('cargo', 'build', '--release', '--target=x86_64-unknown-linux-gnu')
-  if build_win64:
+  if build_win_arm64:
     cmd('cargo', 'build', '--release', '--target=x86_64-pc-windows-gnu')
-  if build_mac64:
+  if build_mac_arm64:
     cmd('cargo', 'build', '--release', '--target=x86_64-apple-darwin')
-  
-  #cmd('cargo', 'build', '--release', '--target=aarch64-apple-darwin')
+  if build_mac_aarch64:
+    cmd('cargo', 'build', '--release', '--target=aarch64-apple-darwin')
 
   print('='*18, 'build complete', '='*18)
   expected_binaries = trim_nones([
-    os.path.join('target', 'x86_64-unknown-linux-gnu', 'release', 'jskeu') if build_linux64 else None,
-    os.path.join('target', 'x86_64-pc-windows-gnu', 'release', 'jskeu.exe') if build_win64 else None,
-    os.path.join('target', 'x86_64-apple-darwin', 'release', 'jskeu') if build_mac64 else None,
+    os.path.join('target', 'x86_64-unknown-linux-gnu', 'release', 'jskeu') if build_linux_arm64 else None,
+    os.path.join('target', 'x86_64-pc-windows-gnu', 'release', 'jskeu.exe') if build_win_arm64 else None,
+    os.path.join('target', 'x86_64-apple-darwin', 'release', 'jskeu') if build_mac_arm64 else None,
+    os.path.join('target', 'aarch64-apple-darwin', 'release', 'jskeu') if build_mac_aarch64 else None,
   ])
   for b in expected_binaries:
     print('Built {}'.format(b))
@@ -139,5 +157,9 @@ if __name__ == '__main__':
     if len(expected_binaries) == 1:
       binary_to_run = os.path.abspath(expected_binaries[0])
       cmd(binary_to_run)
+
+  if publish_release_when_done:
+    import gh_publish_script
+    gh_publish_script.main()
 
 

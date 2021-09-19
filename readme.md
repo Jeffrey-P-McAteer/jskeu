@@ -44,4 +44,23 @@ python -m build run
 
 ```
 
+## Building with secrets
+
+If you run any of the following commands you will need secrets defined.
+The file `.secrets.json` is ignored specifically for this purpose, and
+scripts like `gh_publish_script.py` use this.
+
+The current template for this file is:
+
+```json
+{
+  "GH_TOKEN": "<insert your access token here>"
+}
+```
+
+The following build commands use this information:
+
+```bash
+python -m build publish
+```
 
