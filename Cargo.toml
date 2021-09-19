@@ -13,6 +13,8 @@ name = "jskeu"
 path = "src/jskeu.rs"
 
 [dependencies]
+glutin = "0.27"
+takeable-option = "0.5"
 
 [target.'cfg(target_os="linux")'.dependencies]
 framebuffer = "0.3"
@@ -27,5 +29,5 @@ evdev = "0.11"
 
 [build-dependencies]
 cc = "1.0"
-
+gl_generator = "0.14"
 
