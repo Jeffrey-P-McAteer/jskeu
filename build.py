@@ -69,7 +69,23 @@ def errif_ncontain(haystack, needle, err_msg):
   return 0
 
 if __name__ == '__main__':
-  build_hostonly = not 'all' in sys.argv
+  run_after_build = False
+  build_hostonly = True
+  
+  if 'all' in sys.argv:
+    build_hostonly = False
+  
+  if 'run' in sys.argv:
+    build_hostonly = True
+    run_after_build = True
+
+  build_linux64 = (not build_hostonly) or (build_hostonly and host_is_linux())
+  build_win64 = (not build_hostonly) or (build_hostonly and host_is_windows())
+  build_mac64 = (not build_hostonly) or (build_hostonly and host_is_macos())
+
+  print('build_linux64={}'.format(build_linux64))
+  print('build_win64={}'.format(build_win64))
+  print('build_mac64={}'.format(build_mac64))
 
   # cd to directory containing build.py
   os.chdir(
@@ -87,9 +103,12 @@ if __name__ == '__main__':
     ('zig', 'We use zig to cross-compile everything for foreign targets.'),
   )
   ito = stdout_of('rustup', 'target', 'list', '--installed')
-  num_errs += errif_ncontain(ito, 'x86_64-unknown-linux-gnu', 'You must install the x86_64-unknown-linux-gnu toolchain for rust: rustup target add x86_64-unknown-linux-gnu')
-  num_errs += errif_ncontain(ito, 'x86_64-pc-windows-gnu', 'You must install the x86_64-pc-windows-gnu toolchain for rust: rustup target add x86_64-pc-windows-gnu')
-  num_errs += errif_ncontain(ito, 'x86_64-apple-darwin', 'You must install the x86_64-apple-darwin toolchain for rust: rustup target add x86_64-apple-darwin')
+  if build_linux64:
+    num_errs += errif_ncontain(ito, 'x86_64-unknown-linux-gnu', 'You must install the x86_64-unknown-linux-gnu toolchain for rust: rustup target add x86_64-unknown-linux-gnu')
+  if build_win64:
+    num_errs += errif_ncontain(ito, 'x86_64-pc-windows-gnu', 'You must install the x86_64-pc-windows-gnu toolchain for rust: rustup target add x86_64-pc-windows-gnu')
+  if build_mac64:
+    num_errs += errif_ncontain(ito, 'x86_64-apple-darwin', 'You must install the x86_64-apple-darwin toolchain for rust: rustup target add x86_64-apple-darwin')
   #num_errs += errif_ncontain(ito, 'aarch64-apple-darwin', 'You must install the aarch64-apple-darwin toolchain for rust: rustup target add aarch64-apple-darwin')
   
   if num_errs > 0:
@@ -98,20 +117,27 @@ if __name__ == '__main__':
 
   # Now begin compile for all targets
 
-  cmd('cargo', 'build', '--release', '--target=x86_64-unknown-linux-gnu')
-  cmd('cargo', 'build', '--release', '--target=x86_64-pc-windows-gnu')
-  cmd('cargo', 'build', '--release', '--target=x86_64-apple-darwin')
+  if build_linux64:
+    cmd('cargo', 'build', '--release', '--target=x86_64-unknown-linux-gnu')
+  if build_win64:
+    cmd('cargo', 'build', '--release', '--target=x86_64-pc-windows-gnu')
+  if build_mac64:
+    cmd('cargo', 'build', '--release', '--target=x86_64-apple-darwin')
+  
   #cmd('cargo', 'build', '--release', '--target=aarch64-apple-darwin')
 
   print('='*18, 'build complete', '='*18)
-  expected_binaries = [
-    os.path.join('target', 'x86_64-unknown-linux-gnu', 'release', 'jskeu'),
-    os.path.join('target', 'x86_64-pc-windows-gnu', 'release', 'jskeu.exe'),
-    os.path.join('target', 'x86_64-apple-darwin', 'release', 'jskeu'),
-  ]
+  expected_binaries = trim_nones([
+    os.path.join('target', 'x86_64-unknown-linux-gnu', 'release', 'jskeu') if build_linux64 else None,
+    os.path.join('target', 'x86_64-pc-windows-gnu', 'release', 'jskeu.exe') if build_win64 else None,
+    os.path.join('target', 'x86_64-apple-darwin', 'release', 'jskeu') if build_mac64 else None,
+  ])
   for b in expected_binaries:
     print('Built {}'.format(b))
 
-
+  if run_after_build:
+    if len(expected_binaries) == 1:
+      binary_to_run = os.path.abspath(expected_binaries[0])
+      cmd(binary_to_run)
 
 
